@@ -1,0 +1,20 @@
+diff --git a/physical_ai_server/config/omx_f_config.yaml b/physical_ai_server/config/omx_f_config.yaml
+index b302ad7..9eb41fe 100644
+--- a/physical_ai_server/config/omx_f_config.yaml
++++ b/physical_ai_server/config/omx_f_config.yaml
+@@ -3,12 +3,12 @@ physical_ai_server:
+     omx_f:
+       observation_list:
+         - camera1
+-        # - camera2 #check your camera topic from 'ros2 topic list' command
++        - camera2
+         - state
+ 
+       camera_topic_list:
+-        - camera1:/camera1/image_raw/compressed
+-        # - camera2:/camera2/image_raw/compressed #check your camera topic from 'ros2 topic list' command
++        - camera1:/camera1_aligned/image_raw/compressed
++        - camera2:/camera2/image_raw/compressed
+ 
+       joint_topic_list:
+         - follower:/joint_states

@@ -1,0 +1,59 @@
+<!doctype html><meta charset="utf-8"><title>カメラ位置合わせ2</title>
+<style>body{margin:0;background:#222;color:#eee;font:16px sans-serif}
+#w{position:relative;width:min(calc(100vw - 460px),calc((100vh - 90px)*4/3));aspect-ratio:4/3;margin:8px 0;min-width:480px}
+#w img,#w canvas{position:absolute;left:0;top:0;width:100%;height:100%}
+#ref{opacity:.5}
+.wrap{display:flex;gap:20px;padding:10px;align-items:flex-start}
+table{border-collapse:collapse;font-size:22px}td,th{padding:7px 12px;border-bottom:1px solid #444;text-align:left}
+.ok{color:#4caf50;font-weight:bold}.ng{color:#ff7043;font-weight:bold}
+#st{font-size:32px;margin:6px 0}#mx{font-size:22px;margin-bottom:10px}
+.small{color:#aaa;font-size:15px;max-width:420px}
+@media (max-width:1000px){.wrap{flex-wrap:wrap}#w{width:calc(100vw - 24px);min-width:0}}
+</style>
+<div class="wrap">
+<div>
+ <div>基準画像を半透明で重ねています。透明度 <input type="range" min="0" max="100" value="50" oninput="ref.style.opacity=this.value/100">
+  　矢印の拡大 <select id="mag"><option>1</option><option>3</option><option selected>5</option><option>10</option></select> 倍</div>
+ <div id="w"><img src="http://localhost:8080/stream?topic=/camera1/image_raw&width=640&height=480"><img id="ref" src="ref.png"><canvas id="cv" width="640" height="480"></canvas></div>
+ <div class="small">点線の枠=測定に使う机の範囲。丸=キューブの5か所(学習時の位置)。矢印=その位置を合わせるために、映像を動かす向き(拡大表示)。</div>
+</div>
+<div>
+ <div id="st">読み込み中…</div>
+ <div id="mx"></div>
+ <table id="pt"><tr><th>位置</th><th>ずれ</th><th>判定</th></tr></table>
+ <div style="margin-top:14px;font-size:18px;color:#ccc">動かす向きの目安</div>
+ <table style="font-size:18px">
+  <tr><td>回転</td><td id="rot">-</td><td id="rotm"></td></tr>
+  <tr><td>横</td><td id="dx">-</td><td id="dxm"></td></tr>
+  <tr><td>縦</td><td id="dy">-</td><td id="dym"></td></tr>
+  <tr><td>大きさ</td><td id="sc">-</td><td id="scm"></td></tr>
+ </table>
+ <div class="small" style="margin-top:10px">判定は、5か所すべてのずれが基準(px)以内なら OK。机の範囲(点線の枠)の特徴点だけで、回転・移動・拡大を求めます。カメラの前後左右の傾きは測れません(射影変換は、机の中央に特徴点が少なく、推定が揺れて使えませんでした)。<span id="up"></span></div>
+</div>
+</div>
+<script>
+const cv=document.getElementById('cv'),cx=cv.getContext('2d');
+function arrow(x0,y0,x1,y1,col){cx.strokeStyle=col;cx.fillStyle=col;cx.lineWidth=3;cx.beginPath();cx.moveTo(x0,y0);cx.lineTo(x1,y1);cx.stroke();
+ const a=Math.atan2(y1-y0,x1-x0),h=10;if(Math.hypot(x1-x0,y1-y0)<2)return;cx.beginPath();cx.moveTo(x1,y1);
+ cx.lineTo(x1-h*Math.cos(a-0.4),y1-h*Math.sin(a-0.4));cx.lineTo(x1-h*Math.cos(a+0.4),y1-h*Math.sin(a+0.4));cx.closePath();cx.fill();}
+function hint(id,v,tol,unit,txt){document.getElementById(id).textContent=(v>0?'+':'')+v+unit;const m=document.getElementById(id+'m');
+ const ok=Math.abs(v)<=tol;m.textContent=ok?'—':txt(v);m.className=ok?'':'ng';}
+async function tick(){try{const d=await (await fetch('align2.json?'+Date.now())).json();
+ cx.clearRect(0,0,640,480);
+ if(d.error){st.textContent='測定できません: '+d.error;st.className='ng';return}
+ const r=d.roi;cx.setLineDash([6,6]);cx.strokeStyle='#aaa';cx.lineWidth=1;cx.strokeRect(r[0],r[1],r[2]-r[0],r[3]-r[1]);cx.setLineDash([]);
+ const k=+document.getElementById('mag').value;let rows='<tr><th>位置</th><th>ずれ</th><th>判定</th></tr>';
+ for(const p of d.points){const ok=p.dist<=d.tol_px,col=ok?'#4caf50':'#ff7043';
+  cx.strokeStyle=col;cx.lineWidth=2;cx.beginPath();cx.arc(p.x,p.y,9,0,7);cx.stroke();
+  arrow(p.x+p.dx,p.y+p.dy,p.x+p.dx-k*p.dx,p.y+p.dy-k*p.dy,col);
+  rows+=`<tr><td>${p.name}</td><td>${p.dist} px</td><td class="${ok?'ok':'ng'}">${ok?'OK':'NG'}</td></tr>`;}
+ pt.innerHTML=rows;
+ st.textContent=d.ok?'✅ 合っています':'❌ まだずれています';st.className=d.ok?'ok':'ng';
+ mx.textContent=`最大のずれ ${d.max_px} px(基準 ${d.tol_px} px 以内)　特徴点一致 ${d.inliers}`;
+ hint('rot',d.rot,0.5,'°',v=>'映像を'+(v<0?'反時計回り':'時計回り')+'に回す');
+ hint('dx',d.dx,2,' px',v=>'映像を'+(v<0?'左':'右')+'へ');
+ hint('dy',d.dy,2,' px',v=>'映像を'+(v<0?'上':'下')+'へ');
+ hint('sc',+(d.scale-1).toFixed(3),0.01,'',v=>v<0?'映像が大きい(遠ざける)':'映像が小さい(近づける)');
+ up.textContent=' 更新 '+d.updated;}catch(e){}}
+setInterval(tick,1000);tick();
+</script>

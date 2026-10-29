@@ -1,0 +1,12 @@
+[Unit]
+Description=OMX overhead camera alignment node (cam_align_node.py in open_manipulator container)
+After=default.target
+
+[Service]
+ExecStart=%h/omx/cam_align/run.sh
+ExecStopPost=-/usr/bin/docker exec open_manipulator bash -c 'pkill -f "^python3 /tmp/cam_align_node.py"; sleep 2; pkill -9 -f "^python3 /tmp/cam_align_node.py"; true'
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target

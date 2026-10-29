@@ -1,0 +1,70 @@
+diff --git a/open_manipulator_bringup/launch/omx_ai.launch.py b/open_manipulator_bringup/launch/omx_ai.launch.py
+index 6106d89..8d9e786 100644
+--- a/open_manipulator_bringup/launch/omx_ai.launch.py
++++ b/open_manipulator_bringup/launch/omx_ai.launch.py
+@@ -19,11 +19,13 @@
+ """Launch file for AI teleoperation of OMX L for leader, OMX F for follower."""
+ 
+ from launch import LaunchDescription
++from launch.actions import DeclareLaunchArgument
+ from launch.actions import ExecuteProcess
+ from launch.actions import LogInfo
+ from launch.actions import RegisterEventHandler
+ from launch.event_handlers import OnProcessExit
+ from launch.event_handlers import OnProcessStart
++from launch.substitutions import LaunchConfiguration
+ from launch.substitutions import PathJoinSubstitution
+ from launch_ros.actions import Node
+ from launch_ros.substitutions import FindPackageShare
+@@ -31,6 +33,28 @@ from launch_ros.substitutions import FindPackageShare
+ 
+ def generate_launch_description():
+     """Generate launch description for AI teleoperation."""
++    # Serial ports are fixed by device serial number (stable regardless of plug order)
++    declared_arguments = [
++        DeclareLaunchArgument(
++            'follower_port',
++            default_value=(
++                '/dev/serial/by-id/'
++                'usb-ROBOTIS_OpenRB-150_<FOLLOWER_SERIAL>-if00'
++            ),
++            description='Serial port of the follower (OMX-F).',
++        ),
++        DeclareLaunchArgument(
++            'leader_port',
++            default_value=(
++                '/dev/serial/by-id/'
++                'usb-ROBOTIS_OpenRB-150_<LEADER_SERIAL>-if00'
++            ),
++            description='Serial port of the leader (OMX-L).',
++        ),
++    ]
++    follower_port = LaunchConfiguration('follower_port')
++    leader_port = LaunchConfiguration('leader_port')
++
+     # Step 1: Start follower launch file
+     start_follower = ExecuteProcess(
+         cmd=[
+@@ -38,6 +62,7 @@ def generate_launch_description():
+             'launch',
+             'open_manipulator_bringup',
+             'omx_f_follower_ai.launch.py',
++            ['port_name:=', follower_port],
+         ],
+         output='screen',
+     )
+@@ -64,12 +89,13 @@ def generate_launch_description():
+             'launch',
+             'open_manipulator_bringup',
+             'omx_l_leader_ai.launch.py',
++            ['port_name:=', leader_port],
+         ],
+         output='screen',
+         shell=True,
+     )
+ 
+-    return LaunchDescription([
++    return LaunchDescription(declared_arguments + [
+         LogInfo(msg='Starting omx_f_follower_ai.launch.py...'),
+         start_follower,
+         # Step 2: Ensure joint_trajectory_executor starts after start_follower
